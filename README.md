@@ -41,7 +41,9 @@ Open http://localhost:8000/ in a desktop browser.
 
 ## GitHub Pages deployment
 
-The `Deploy Rust Frog Jumper to GitHub Pages` workflow runs on pushes to `main` and can also be started manually. It:
+One-time setup: open [Settings → Pages](https://github.com/coolboy354059/frog-jumper-rust/settings/pages), set **Build and deployment → Source** to **GitHub Actions**, and save. GitHub requires this initial Pages enablement in the repository settings.
+
+After that, the `Deploy Rust Frog Jumper to GitHub Pages` workflow runs on pushes to `main` and can also be started manually from **Actions**. It:
 
 1. Installs stable Rust and the `wasm32-unknown-unknown` target.
 2. Runs the Rust unit tests.
