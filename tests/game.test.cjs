@@ -64,6 +64,8 @@ test('page loads with correct title, canvas, and visible main menu', async () =>
   assert.equal(await page.locator('#game').count(), 1);
   assert.equal(await page.locator('#game').getAttribute('width'), '960');
   assert.equal(await page.locator('#game').getAttribute('height'), '600');
+  assert.equal(await page.locator('#engine-status').count(), 0, 'the game should not show which movement engine is active');
+  assert.equal(await page.getByText(/RUST \\/ WASM movement ready|JavaScript movement/i).count(), 0, 'engine details should stay out of the visible game UI');
   await assertVisibleText(page, 'FROG JUMPER');
   assert.deepEqual(errors, []);
   await page.close();
