@@ -53,11 +53,6 @@
   .cabinet{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none;display:flex;flex:1;min-height:0;flex-direction:column}
   .hud{display:grid;grid-template-columns:1.45fr 1fr 1fr;gap:8px;margin:0 0 10px}.stat{background:#0c2832a8;border:1px solid #ffffff15;border-radius:12px;padding:9px 12px;min-width:0}.stat label{display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#b2d2c6;margin-bottom:4px;font-weight:800}.stat strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}.progress-outer{margin-top:7px;width:100%;height:8px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,.08)}.progress-fill{height:100%;width:0;background:linear-gradient(90deg,#d9ff7d,#7ae38f);border-radius:999px;box-shadow:0 0 16px rgba(201,255,103,.5)}.best-run{margin-top:4px;font-size:11px;color:#a9c8bb}
   .stage{position:relative;width:100%;flex:1;min-height:240px;overflow:hidden;border-radius:5px;background:#88dfff;outline:0;isolation:isolate}.stage canvas{display:block;width:100%;height:100%;min-height:240px;aspect-ratio:16/10;object-fit:fill;background:#88dfff}
-  .engine-status{position:absolute;z-index:8;top:12px;right:12px;display:inline-flex;align-items:center;gap:8px;max-width:calc(100% - 24px);padding:8px 11px;border:1px solid #ffffff35;border-radius:999px;background:#071d27d9;color:#eafff5;font-size:10px;font-weight:900;letter-spacing:.09em;box-shadow:0 4px 16px #0003;pointer-events:none;backdrop-filter:blur(8px)}
-  .engine-status-dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#f4c85d;box-shadow:0 0 10px currentColor}
-  .engine-status[data-engine="rust"] .engine-status-dot{background:#8cf08d;color:#8cf08d}
-  .engine-status[data-engine="javascript"] .engine-status-dot{background:#f5c85b;color:#f5c85b}
-  .engine-status[data-engine="loading"] .engine-status-dot{background:#78d8ff;color:#78d8ff}
   .overlay{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:18px;background:#071d27bb;backdrop-filter:blur(4px);text-align:center}.overlay[hidden]{display:none}
   @media(max-height:520px){.overlay{align-items:center;overflow-y:auto}.overlay-card{margin:auto}}
   .overlay-card{max-width:440px;width:min(90%,420px);margin:auto;padding:20px 18px;border-radius:18px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,rgba(24,62,72,.96),rgba(8,22,29,.96));box-shadow:0 30px 70px rgba(0,0,0,.42)}
@@ -167,7 +162,6 @@
 <div class="app">
   <main class="cabinet" aria-label="Frog Jumper game">
     <div class="stage" id="stage">
-      <div class="engine-status" id="engine-status" data-engine="loading" role="status" aria-live="polite"><span class="engine-status-dot" aria-hidden="true"></span><span class="engine-label">RUST ENGINE STARTING</span></div>
       <canvas id="game" width="960" height="600" tabindex="0" role="img" aria-label="Frog Jumper platform game. Use arrow keys to move and space to jump."></canvas>
       <div class="boss-tools" id="boss-tools" hidden aria-label="Boss Fight tools">
         <button type="button" class="boss-tool fire" id="boss-fire" title="Fire (F or controller X)">🔥 FIRE</button>
@@ -191,16 +185,8 @@
 (() => {
   'use strict';
 
-  // Optional Rust/WebAssembly movement calculation. If the generated package
-  // is absent or fails to initialize, the original JavaScript calculation runs.
-  const rustEngineBadge = document.getElementById('engine-status');
-  const setRustEngineStatus = (engine, label) => {
-    if (!rustEngineBadge) return;
-    rustEngineBadge.dataset.engine = engine;
-    const labelNode = rustEngineBadge.querySelector('.engine-label');
-    if (labelNode) labelNode.textContent = label;
-  };
-  setRustEngineStatus('loading', 'RUST ENGINE STARTING');
+  // Rust/WebAssembly quietly handles player movement when it loads correctly.
+  // If the module, memory buffer, or a movement step fails, JavaScript takes over.
   let rustStepPlayerMotion = null;
   let rustCreateMotionBuffer = null;
   let rustMotionBuffer = null;
@@ -216,19 +202,16 @@
           rustStepPlayerMotion = rustModule.step_player_motion_into_buffer;
           rustCreateMotionBuffer = rustModule.create_motion_buffer;
           rustMotionBuffer = buffer;
-          setRustEngineStatus('rust', 'RUST + WASM ACTIVE');
-          console.info('Frog Jumper Rust movement module loaded with a reusable WASM buffer.');
+          console.info('Frog Jumper: Rust/WASM movement ready.');
         } else {
-          setRustEngineStatus('javascript', 'JAVASCRIPT FALLBACK');
-          console.warn('Rust movement buffer was unavailable; using JavaScript movement.');
+          console.warn('Frog Jumper: Rust/WASM buffer unavailable; using JavaScript movement.');
         }
       } else {
-        setRustEngineStatus('javascript', 'JAVASCRIPT FALLBACK');
+        console.warn('Frog Jumper: Rust/WASM exports unavailable; using JavaScript movement.');
       }
     })
-    .catch(() => {
-      setRustEngineStatus('javascript', 'JAVASCRIPT FALLBACK');
-      console.info('Rust WebAssembly package unavailable; using JavaScript movement.');
+    .catch((error) => {
+      console.warn('Frog Jumper: Rust/WASM could not load; using JavaScript movement.', error);
     });
   const canvas = document.getElementById('game');
   const overlay = document.getElementById('overlay');
