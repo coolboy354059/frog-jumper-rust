@@ -53,6 +53,11 @@ jobs:
         working-directory: frog-jumper-2d
         run: npm test
 
+      - name: Install native build tools for Rust tests
+        run: |
+          apt-get update
+          apt-get install -y build-essential
+
       - name: Install stable Rust and WebAssembly target
         uses: dtolnay/rust-toolchain@stable
         with:
