@@ -59,9 +59,9 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          version: latest
+        run: |
+          curl --retry 3 --retry-delay 2 -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Run Rust unit tests
         working-directory: frog-jumper-rust
