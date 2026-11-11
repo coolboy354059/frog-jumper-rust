@@ -5,7 +5,7 @@ on:
     branches: ["main"]
     paths:
       - ".github/workflows/compare-engines.yml"
-      - "tests/compare-engines.cjs"
+      - "tests/**"
       - "rust/**"
       - "index-game.html"
       - "package.json"
