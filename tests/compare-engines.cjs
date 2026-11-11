@@ -8,7 +8,18 @@ const {
   step_player_motion_into_buffer: rustStepIntoBuffer
 } = require('../rust/pkg-node/frog_jumper_rust_node.js');
 
-const rustBuffer = create_motion_buffer();
+// Warm the legacy allocating export before creating a view into WASM memory.
+ // A WebAssembly memory.grow detaches existing typed-array views.
+rustStepAllocating(0, 0, 0, 0, 1 / 60, 300, 1580, 900);
+let rustBuffer = create_motion_buffer();
+
+function ensureRustBuffer() {
+  if (!rustBuffer || rustBuffer.length !== 4) {
+    rustBuffer = create_motion_buffer();
+  }
+  assert.equal(rustBuffer.length, 4, 'reusable WASM motion buffer must contain four values');
+  return rustBuffer;
+}
 
 function jsStep(x, y, vy, axis, dt, speed, gravity, maxFall) {
   const vx = axis * speed;
@@ -35,7 +46,8 @@ const scenarios = [
 ];
 
 function readRustBuffer() {
-  return [rustBuffer[0], rustBuffer[1], rustBuffer[2], rustBuffer[3]];
+  const buffer = ensureRustBuffer();
+  return [buffer[0], buffer[1], buffer[2], buffer[3]];
 }
 
 function verifyParity() {
@@ -96,6 +108,7 @@ function runRustAllocatingBenchmark(iterations) {
 }
 
 function runRustBufferBenchmark(iterations) {
+  ensureRustBuffer();
   let x = 120, y = 80, vy = 0, checksum = 0;
   const start = performance.now();
   for (let i = 0; i < iterations; i++) {
