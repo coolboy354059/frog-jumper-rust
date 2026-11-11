@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-labelledby="title desc">
+  <title id="title">Red frog waving on Jupiter</title>
+  <desc id="desc">A cheerful red cartoon frog waves in front of the banded planet Jupiter, surrounded by stars.</desc>
+  <defs>
+    <radialGradient id="space" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#243b75"/><stop offset="1" stop-color="#080f29"/></radialGradient>
+    <linearGradient id="planet" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffe0a3"/><stop offset=".45" stop-color="#d68b55"/><stop offset="1" stop-color="#8e4e3f"/></linearGradient>
+    <linearGradient id="frog" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff7373"/><stop offset=".55" stop-color="#e62d43"/><stop offset="1" stop-color="#9b1839"/></linearGradient>
+    <linearGradient id="belly" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffd0aa"/><stop offset="1" stop-color="#ef896f"/></linearGradient>
+    <clipPath id="planetClip"><circle cx="355" cy="228" r="178"/></clipPath>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="640" height="480" fill="url(#space)"/>
+  <g fill="#fff2cf">
+    <circle cx="65" cy="65" r="2.5"/><circle cx="130" cy="128" r="2"/><circle cx="540" cy="78" r="2.5"/>
+    <circle cx="585" cy="180" r="1.8"/><circle cx="82" cy="320" r="2"/><circle cx="520" cy="380" r="2.2"/>
+    <circle cx="165" cy="410" r="1.6"/><circle cx="470" cy="35" r="1.8"/><circle cx="270" cy="54" r="1.4"/>
+  </g>
+  <g fill="none" stroke="#f6d88e" opacity=".6"><path d="M90 190l4 12 12 4-12 4-4 12-4-12-12-4 12-4z"/><path d="M550 275l3 9 9 3-9 3-3 9-3-9-9-3 9-3z"/></g>
+  <circle cx="355" cy="228" r="188" fill="#e9b17b" opacity=".16" filter="url(#glow)"/>
+  <g clip-path="url(#planetClip)">
+    <circle cx="355" cy="228" r="178" fill="url(#planet)"/>
+    <path d="M160 110 Q270 75 535 120 L540 153 Q320 127 174 157Z" fill="#f4d1a0" opacity=".95"/>
+    <path d="M170 165 Q310 126 540 166 L540 197 Q340 176 168 205Z" fill="#b86e54"/>
+    <path d="M165 215 Q330 190 545 220 L540 258 Q330 228 165 259Z" fill="#efbd7c"/>
+    <path d="M165 275 Q320 245 545 284 L535 316 Q320 290 165 320Z" fill="#a95b4c"/>
+    <path d="M185 336 Q350 306 525 345 L505 378 Q320 350 205 375Z" fill="#f1c18b"/>
+    <path d="M220 90 Q350 110 515 99" stroke="#fff0d0" stroke-width="12" opacity=".3" fill="none"/>
+    <ellipse cx="423" cy="261" rx="43" ry="20" fill="#a94e43" opacity=".7" transform="rotate(-12 423 261)"/>
+    <ellipse cx="410" cy="255" rx="26" ry="9" fill="#d77c5b" opacity=".8" transform="rotate(-12 410 255)"/>
+  </g>
+  <circle cx="355" cy="228" r="178" fill="none" stroke="#ffe0ad" stroke-width="5" opacity=".55"/>
+  <g stroke="#761b37" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M286 324 Q259 355 244 393 Q229 420 198 413 Q179 410 185 392 Q194 372 213 375 Q221 349 243 327Z" fill="url(#frog)"/>
+    <path d="M365 321 Q394 347 405 382 Q414 408 445 407 Q466 406 461 385 Q456 367 435 370 Q431 346 408 320Z" fill="url(#frog)"/>
+    <ellipse cx="326" cy="333" rx="91" ry="88" fill="url(#frog)"/>
+    <ellipse cx="324" cy="361" rx="57" ry="48" fill="url(#belly)" stroke="#9c2941" stroke-width="6"/>
+    <path d="M275 284 Q256 258 246 227 Q239 206 220 206 Q203 207 207 226 Q210 244 229 244 Q235 278 270 304Z" fill="url(#frog)"/>
+    <path d="M372 283 Q402 255 408 223 Q412 205 432 202 Q450 202 444 223 Q440 241 423 239 Q417 275 388 303Z" fill="url(#frog)"/>
+    <path d="M432 204 Q449 185 451 166" fill="none" stroke="#e94a59" stroke-width="15"/>
+    <path d="M451 166 Q462 150 474 158 Q484 164 476 176 Q468 188 451 184 Q437 181 440 169" fill="url(#frog)"/>
+    <path d="M251 281 Q254 238 286 231 Q326 214 365 231 Q397 245 399 284 Q401 321 373 339 Q342 359 297 344 Q255 330 251 281Z" fill="url(#frog)"/>
+    <path d="M280 253 Q272 228 283 211" fill="none" stroke="#e94a59" stroke-width="16"/>
+    <path d="M370 253 Q378 228 366 211" fill="none" stroke="#e94a59" stroke-width="16"/>
+    <ellipse cx="281" cy="205" rx="25" ry="28" fill="#ffd9c8" stroke="#8d1d39" stroke-width="7"/>
+    <ellipse cx="368" cy="205" rx="25" ry="28" fill="#ffd9c8" stroke="#8d1d39" stroke-width="7"/>
+    <ellipse cx="286" cy="207" rx="9" ry="12" fill="#20223c" stroke="none"/>
+    <ellipse cx="372" cy="207" rx="9" ry="12" fill="#20223c" stroke="none"/>
+    <path d="M301 286 Q327 299 350 285" fill="none" stroke="#7b1837" stroke-width="7"/>
+    <path d="M268 310 Q251 315 244 304" fill="none" stroke="#ff9b9b" stroke-width="6"/>
+    <path d="M382 309 Q399 315 406 304" fill="none" stroke="#ff9b9b" stroke-width="6"/>
+  </g>
+  <g fill="#fff" opacity=".45"><ellipse cx="295" cy="314" rx="12" ry="5" transform="rotate(-25 295 314)"/></g>
+  <text x="32" y="448" fill="#fff0d2" font-family="system-ui,sans-serif" font-size="18" font-weight="800" letter-spacing="4">JUPITER EXPLORER</text>
+</svg>

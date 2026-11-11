@@ -1,0 +1,66 @@
+name: Strict browser tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  browser-tests:
+    name: Playwright regression suite
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-jammy
+      options: --ipc=host
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        id: checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        id: setup_node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install exact dependencies
+        id: install_dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run strict browser tests
+        id: browser_tests
+        run: |
+          set +e
+          npm test > test-output.log 2>&1
+          result=$?
+          set -e
+          cat test-output.log
+          echo "exit_code=$result" >> "$GITHUB_OUTPUT"
+          node -e "const fs=require('node:fs'); const output=fs.readFileSync('test-output.log','utf8'); const blocks=output.split(/(?=^not ok \\d+ - )/m).filter(block=>block.startsWith('not ok ')); const failures=blocks.map(block=>{const title=(block.split(/\\r?\\n/)[0]||'').replace(/^not ok \\d+ - /,''); const quoted=(block.match(/error:\\s*['\\\"]([^'\\\"]+)/)||[])[1]||''; const yaml=(block.match(/error:\\s*\\|[-]?\\s*\\n([\\s\\S]*?)(?:\\n  [a-zA-Z]+:|$)/)||[])[1]||''; const detail=quoted||yaml.split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean).slice(0,1).join(' '); return (title+': '+detail).replace(/[\\r\\n]/g,' ').slice(0,170);}); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'failures='+failures.join('; ').slice(0,190)+String.fromCharCode(10));"
+          exit "$result"
+
+      - name: Publish regression test status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          NODE_OUTCOME: ${{ steps.setup_node.outcome }}
+          DEPENDENCIES_OUTCOME: ${{ steps.install_dependencies.outcome }}
+          TEST_OUTCOME: ${{ steps.browser_tests.outcome }}
+          FAILED_TESTS: ${{ steps.browser_tests.outputs.failures }}
+          TEST_EXIT_CODE: ${{ steps.browser_tests.outputs.exit_code }}
+        with:
+          script: |
+            const state = process.env.TEST_OUTCOME === 'success' ? 'success' : 'failure';
+            const failureDetails = (process.env.FAILED_TESTS || '').trim();
+            const contextName = state === 'success'
+              ? 'frog-jumper/playwright'
+              : ('fjpw: ' + ((failureDetails.split(': ').slice(1).join(': ')) || failureDetails || ['checkout='+process.env.CHECKOUT_OUTCOME,'node='+process.env.NODE_OUTCOME,'deps='+process.env.DEPENDENCIES_OUTCOME,'tests='+process.env.TEST_OUTCOME].join(','))).slice(0, 100);
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state,
+              context: contextName,
+              description: state === 'success' ? 'Playwright suite passed' : 'Playwright suite failed; check Actions logs'
+            });

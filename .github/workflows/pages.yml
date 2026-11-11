@@ -1,0 +1,73 @@
+name: Deploy Rust Frog Jumper to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Rust Frog Jumper
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust and WebAssembly target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Run Rust unit tests
+        run: cargo test --manifest-path rust/Cargo.toml
+
+      - name: Build Rust WebAssembly package
+        run: wasm-pack build rust --target web --release
+
+      - name: Assemble the website
+        run: |
+          rm -rf _site
+          mkdir -p _site/assets _site/rust/pkg
+          cp index.html index-game.html service-worker.js maintenance.html robots.txt sitemap.xml _site/
+          cp -R assets/. _site/assets/
+          cp -R rust/pkg/. _site/rust/pkg/
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
