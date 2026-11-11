@@ -1,0 +1,82 @@
+name: Compare Frog Jumper JS vs Rust
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/compare-engines.yml"
+      - "tests/compare-engines.cjs"
+      - "rust/**"
+      - "index-game.html"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-games:
+    name: Regression tests and JS vs Rust comparison
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-jammy
+      options: --ipc=host
+    timeout-minutes: 25
+    steps:
+      - name: Check out Rust edition
+        uses: actions/checkout@v4
+        with:
+          path: frog-jumper-rust
+
+      - name: Check out original JavaScript edition
+        uses: actions/checkout@v4
+        with:
+          repository: coolboy354059/frog-jumper-2d
+          ref: main
+          path: frog-jumper-2d
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install original game dependencies
+        working-directory: frog-jumper-2d
+        run: npm install --no-audit --no-fund
+
+      - name: Install Rust edition dependencies
+        working-directory: frog-jumper-rust
+        run: npm install --no-audit --no-fund
+
+      - name: Run original JavaScript game browser tests
+        working-directory: frog-jumper-2d
+        run: npm test
+
+      - name: Install stable Rust and WebAssembly target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Run Rust unit tests
+        working-directory: frog-jumper-rust
+        run: cargo test --manifest-path rust/Cargo.toml
+
+      - name: Build WebAssembly for the Rust game's browser tests
+        working-directory: frog-jumper-rust
+        run: wasm-pack build rust --target web --release
+
+      - name: Run Rust edition browser tests
+        working-directory: frog-jumper-rust
+        run: npm test
+
+      - name: Build a Node.js-loadable WebAssembly module for direct comparison
+        working-directory: frog-jumper-rust
+        run: wasm-pack build rust --target nodejs --out-dir pkg-node --out-name frog_jumper_rust_node --release
+
+      - name: Compare movement results and benchmark both engines
+        working-directory: frog-jumper-rust
+        run: node tests/compare-engines.cjs
