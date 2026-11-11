@@ -1,4 +1,5 @@
 <!-- RUST EDITION: Separate experimental site; persistent saves use isolated frogJumperRust keys. -->
+<!-- CHANGE LOG: 2026-11-11 — Reuse a WASM-backed Float64Array for player motion so fixed updates do not allocate a new result array; keep JavaScript fallback. -->
 <!-- CHANGE LOG: 2026-11-10 — Rust experiment: add an optional WebAssembly player-motion step with a JavaScript fallback; collision and gameplay rules remain in JavaScript. -->
 <!-- CHANGE LOG: 2026-11-08 — Fix issue #12: restore multiplayer retry controls when a WebSocket fails or closes before opening. -->
 <!-- CHANGE LOG: 2026-11-08 — Fix issues #7, #8, and #10: serialize achievement writes across tabs, refresh achievement/best-score views on storage events, and show multiplayer disconnect recovery. -->
@@ -201,13 +202,26 @@
   };
   setRustEngineStatus('loading', 'RUST ENGINE STARTING');
   let rustStepPlayerMotion = null;
+  let rustCreateMotionBuffer = null;
+  let rustMotionBuffer = null;
   import('./rust/pkg/frog_jumper_rust.js')
     .then(async (rustModule) => {
       await rustModule.default();
-      if (typeof rustModule.step_player_motion === 'function') {
-        rustStepPlayerMotion = rustModule.step_player_motion;
-        setRustEngineStatus('rust', 'RUST + WASM ACTIVE');
-        console.info('Frog Jumper Rust movement module loaded.');
+      if (
+        typeof rustModule.step_player_motion_into_buffer === 'function' &&
+        typeof rustModule.create_motion_buffer === 'function'
+      ) {
+        const buffer = rustModule.create_motion_buffer();
+        if (buffer && buffer.length === 4 && buffer.BYTES_PER_ELEMENT === 8) {
+          rustStepPlayerMotion = rustModule.step_player_motion_into_buffer;
+          rustCreateMotionBuffer = rustModule.create_motion_buffer;
+          rustMotionBuffer = buffer;
+          setRustEngineStatus('rust', 'RUST + WASM ACTIVE');
+          console.info('Frog Jumper Rust movement module loaded with a reusable WASM buffer.');
+        } else {
+          setRustEngineStatus('javascript', 'JAVASCRIPT FALLBACK');
+          console.warn('Rust movement buffer was unavailable; using JavaScript movement.');
+        }
       } else {
         setRustEngineStatus('javascript', 'JAVASCRIPT FALLBACK');
       }
@@ -1263,22 +1277,34 @@
     const axis=(input.right?1:0)-(input.left?1:0);
     const speed=(292 + Math.min(12, Math.floor(levelIndex/5)*2))*(gameMode==='boss'&&bossSpeedTimer>0?1.65:1);
     const previousBottom=player.y+player.h;
-    let rustMotion=null;
-    if(rustStepPlayerMotion){
+    let rustMotionApplied=false;
+    if(rustStepPlayerMotion&&rustMotionBuffer){
       try{
-        rustMotion=rustStepPlayerMotion(player.x,player.y,player.vy,axis,dt,speed,1580,900);
+        // Recreate the view only if WebAssembly memory has grown and detached it.
+        if(rustMotionBuffer.length!==4)rustMotionBuffer=rustCreateMotionBuffer();
+        rustStepPlayerMotion(player.x,player.y,player.vy,axis,dt,speed,1580,900);
+        const nextX=rustMotionBuffer[0];
+        const nextY=rustMotionBuffer[1];
+        const nextVx=rustMotionBuffer[2];
+        const nextVy=rustMotionBuffer[3];
+        if(Number.isFinite(nextX)&&Number.isFinite(nextY)&&Number.isFinite(nextVx)&&Number.isFinite(nextVy)){
+          player.x=nextX;
+          player.y=nextY;
+          player.vx=nextVx;
+          player.vy=nextVy;
+          rustMotionApplied=true;
+        }else{
+          console.warn('Rust movement returned invalid values; switching to JavaScript movement.');
+          rustStepPlayerMotion=null;
+          rustMotionBuffer=null;
+        }
       }catch(error){
         console.warn('Rust movement failed; switching to JavaScript movement.',error);
         rustStepPlayerMotion=null;
+        rustMotionBuffer=null;
       }
     }
-    if(rustMotion&&rustMotion.length===4&&Number.isFinite(rustMotion[0])&&Number.isFinite(rustMotion[1])&&Number.isFinite(rustMotion[2])&&Number.isFinite(rustMotion[3])){
-      player.x=rustMotion[0];
-      player.y=rustMotion[1];
-      player.vx=rustMotion[2];
-      player.vy=rustMotion[3];
-    }else{
-      if(rustMotion)rustStepPlayerMotion=null;
+    if(!rustMotionApplied){
       player.vx=axis*speed;
       player.x+=player.vx*dt;
       player.vy=Math.min(900,player.vy+1580*dt);
