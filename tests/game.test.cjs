@@ -643,7 +643,7 @@ test('browser without a 2D canvas context gets a helpful fallback instead of cra
 test('all game artwork files are served successfully', async () => {
   const {page}=await freshPage();
   for (const asset of [
-    '/assets/601f2f8d-d595-494c-bd9e-6aaaf5fcdcea.png',
+    '/assets/jupiter-frog.svg',
     '/assets/black-hat.png',
     '/assets/tv-hat.png'
   ]) {
