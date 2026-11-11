@@ -2,7 +2,13 @@
 
 const assert = require('node:assert/strict');
 const { performance } = require('node:perf_hooks');
-const { step_player_motion: rustStep } = require('../rust/pkg-node/frog_jumper_rust_node.js');
+const {
+  step_player_motion: rustStepAllocating,
+  create_motion_buffer,
+  step_player_motion_into_buffer: rustStepIntoBuffer
+} = require('../rust/pkg-node/frog_jumper_rust_node.js');
+
+const rustBuffer = create_motion_buffer();
 
 function jsStep(x, y, vy, axis, dt, speed, gravity, maxFall) {
   const vx = axis * speed;
@@ -28,6 +34,10 @@ const scenarios = [
   { name: 'rising-and-falling', axis: i => (i % 80 < 40 ? 1 : 0), dt: () => 1 / 60, speed: 300, gravity: 1580, maxFall: 900, startVy: -655 }
 ];
 
+function readRustBuffer() {
+  return [rustBuffer[0], rustBuffer[1], rustBuffer[2], rustBuffer[3]];
+}
+
 function verifyParity() {
   const stepsPerScenario = 12000;
   let compared = 0;
@@ -39,14 +49,62 @@ function verifyParity() {
       const dt = scenario.dt(i);
       const args = [axis, dt, scenario.speed, scenario.gravity, scenario.maxFall];
       const expected = jsStep(js[0], js[1], js[2], ...args);
-      const actual = Array.from(rustStep(rust[0], rust[1], rust[2], ...args));
-      for (let k = 0; k < 4; k++) assertClose(actual[k], expected[k], scenario.name + ' step ' + i + ' field ' + k);
+
+      const legacy = Array.from(rustStepAllocating(rust[0], rust[1], rust[2], ...args));
+      rustStepIntoBuffer(rust[0], rust[1], rust[2], ...args);
+      const optimized = readRustBuffer();
+
+      for (let k = 0; k < 4; k++) {
+        assertClose(legacy[k], expected[k], scenario.name + ' legacy step ' + i + ' field ' + k);
+        assertClose(optimized[k], expected[k], scenario.name + ' buffered step ' + i + ' field ' + k);
+      }
+
       js = [expected[0], expected[1], expected[3]];
-      rust = [actual[0], actual[1], actual[3]];
+      rust = [optimized[0], optimized[1], optimized[3]];
       compared++;
     }
   }
-  console.log('PARITY PASS: ' + compared + ' movement steps matched across JS and compiled Rust/WASM.');
+  console.log('PARITY PASS: ' + compared + ' movement steps matched across JavaScript, legacy Rust/WASM, and reusable-buffer Rust/WASM.');
+}
+
+// This mirrors the actual game's JavaScript fallback: inline math and no
+// per-frame result array or helper-object allocation.
+function runJsBenchmark(iterations) {
+  let x = 120, y = 80, vy = 0, checksum = 0;
+  const start = performance.now();
+  for (let i = 0; i < iterations; i++) {
+    const axis = (i % 180 < 90) ? 1 : -1;
+    const vx = axis * 300;
+    x += vx * (1 / 60);
+    vy = Math.min(900, vy + 1580 * (1 / 60));
+    y += vy * (1 / 60);
+    checksum += vx;
+  }
+  return { ms: performance.now() - start, checksum, x, y, vy };
+}
+
+function runRustAllocatingBenchmark(iterations) {
+  let x = 120, y = 80, vy = 0, checksum = 0;
+  const start = performance.now();
+  for (let i = 0; i < iterations; i++) {
+    const axis = (i % 180 < 90) ? 1 : -1;
+    const result = rustStepAllocating(x, y, vy, axis, 1 / 60, 300, 1580, 900);
+    x = result[0]; y = result[1]; vy = result[3];
+    checksum += result[2];
+  }
+  return { ms: performance.now() - start, checksum, x, y, vy };
+}
+
+function runRustBufferBenchmark(iterations) {
+  let x = 120, y = 80, vy = 0, checksum = 0;
+  const start = performance.now();
+  for (let i = 0; i < iterations; i++) {
+    const axis = (i % 180 < 90) ? 1 : -1;
+    rustStepIntoBuffer(x, y, vy, axis, 1 / 60, 300, 1580, 900);
+    x = rustBuffer[0]; y = rustBuffer[1]; vy = rustBuffer[3];
+    checksum += rustBuffer[2];
+  }
+  return { ms: performance.now() - start, checksum, x, y, vy };
 }
 
 function median(values) {
@@ -54,56 +112,49 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-function runJsBenchmark(iterations) {
-  let x = 120, y = 80, vy = 0, checksum = 0;
-  const start = performance.now();
-  for (let i = 0; i < iterations; i++) {
-    const axis = (i % 180 < 90) ? 1 : -1;
-    const dt = 1 / 60;
-    const result = jsStep(x, y, vy, axis, dt, 300, 1580, 900);
-    x = result[0]; y = result[1]; vy = result[3];
-    checksum += result[2];
-  }
-  return { ms: performance.now() - start, checksum, x, y, vy };
-}
-
-function runRustBenchmark(iterations) {
-  let x = 120, y = 80, vy = 0, checksum = 0;
-  const start = performance.now();
-  for (let i = 0; i < iterations; i++) {
-    const axis = (i % 180 < 90) ? 1 : -1;
-    const result = rustStep(x, y, vy, axis, 1 / 60, 300, 1580, 900);
-    x = result[0]; y = result[1]; vy = result[3];
-    checksum += result[2];
-  }
-  return { ms: performance.now() - start, checksum, x, y, vy };
-}
-
 function benchmark() {
   const iterations = 150000;
   const warmup = 20000;
   runJsBenchmark(warmup);
-  runRustBenchmark(warmup);
+  runRustAllocatingBenchmark(warmup);
+  runRustBufferBenchmark(warmup);
+
   const jsTimes = [];
-  const rustTimes = [];
-  let jsLast, rustLast;
+  const allocatingTimes = [];
+  const bufferTimes = [];
+  let jsLast, allocatingLast, bufferLast;
+
   for (let round = 0; round < 5; round++) {
-    jsLast = runJsBenchmark(iterations);
-    rustLast = runRustBenchmark(iterations);
+    if (round % 2 === 0) {
+      jsLast = runJsBenchmark(iterations);
+      allocatingLast = runRustAllocatingBenchmark(iterations);
+      bufferLast = runRustBufferBenchmark(iterations);
+    } else {
+      bufferLast = runRustBufferBenchmark(iterations);
+      jsLast = runJsBenchmark(iterations);
+      allocatingLast = runRustAllocatingBenchmark(iterations);
+    }
     jsTimes.push(jsLast.ms);
-    rustTimes.push(rustLast.ms);
+    allocatingTimes.push(allocatingLast.ms);
+    bufferTimes.push(bufferLast.ms);
   }
-  assertClose(rustLast.x, jsLast.x, 'benchmark final x');
-  assertClose(rustLast.y, jsLast.y, 'benchmark final y');
-  assertClose(rustLast.vy, jsLast.vy, 'benchmark final vertical velocity');
+
+  for (const [label, result] of [['allocating Rust', allocatingLast], ['buffered Rust', bufferLast]]) {
+    assertClose(result.x, jsLast.x, label + ' final x');
+    assertClose(result.y, jsLast.y, label + ' final y');
+    assertClose(result.vy, jsLast.vy, label + ' final vertical velocity');
+  }
+
   const jsMedian = median(jsTimes);
-  const rustMedian = median(rustTimes);
-  const ratio = rustMedian / jsMedian;
+  const allocatingMedian = median(allocatingTimes);
+  const bufferMedian = median(bufferTimes);
   console.log('BENCHMARK (Node.js runner; movement math only, not FPS or full-game performance)');
   console.log('Iterations per round: ' + iterations + '; rounds: 5; warmup: ' + warmup);
-  console.log('JavaScript median: ' + jsMedian.toFixed(3) + ' ms');
-  console.log('Rust/WASM median: ' + rustMedian.toFixed(3) + ' ms');
-  console.log('Rust/WASM vs JS: ' + (ratio * 100).toFixed(1) + '% of JS time (' + (ratio <= 1 ? 'faster' : 'slower') + ')');
+  console.log('JavaScript inline median: ' + jsMedian.toFixed(3) + ' ms');
+  console.log('Rust/WASM allocating-result median: ' + allocatingMedian.toFixed(3) + ' ms');
+  console.log('Rust/WASM reusable-buffer median: ' + bufferMedian.toFixed(3) + ' ms');
+  console.log('Reusable buffer vs allocating Rust: ' + (allocatingMedian / bufferMedian).toFixed(2) + 'x speedup');
+  console.log('Reusable-buffer Rust/WASM vs inline JS: ' + (bufferMedian / jsMedian * 100).toFixed(1) + '% of JS time (' + (bufferMedian <= jsMedian ? 'faster' : 'slower') + ')');
 }
 
 verifyParity();
