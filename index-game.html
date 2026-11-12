@@ -194,12 +194,12 @@
     .then(async (rustModule) => {
       await rustModule.default();
       if (
-        typeof rustModule.step_player_motion_into_buffer === 'function' &&
+        typeof rustModule.step_player_motion_fast_into_buffer === 'function' &&
         typeof rustModule.create_motion_buffer === 'function'
       ) {
         const buffer = rustModule.create_motion_buffer();
         if (buffer && buffer.length === 4 && buffer.BYTES_PER_ELEMENT === 8) {
-          rustStepPlayerMotion = rustModule.step_player_motion_into_buffer;
+          rustStepPlayerMotion = rustModule.step_player_motion_fast_into_buffer;
           rustCreateMotionBuffer = rustModule.create_motion_buffer;
           rustMotionBuffer = buffer;
           console.info('Frog Jumper: Rust/WASM movement ready.');
@@ -1265,7 +1265,7 @@
       try{
         // Recreate the view only if WebAssembly memory has grown and detached it.
         if(rustMotionBuffer.length!==4)rustMotionBuffer=rustCreateMotionBuffer();
-        rustStepPlayerMotion(player.x,player.y,player.vy,axis,dt,speed,1580,900);
+        rustStepPlayerMotion(player.x,player.y,player.vy,axis,dt,speed);
         const nextX=rustMotionBuffer[0];
         const nextY=rustMotionBuffer[1];
         const nextVx=rustMotionBuffer[2];
