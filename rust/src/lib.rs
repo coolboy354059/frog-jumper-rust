@@ -41,6 +41,27 @@ fn calculate_player_motion(
     ]
 }
 
+/// Specialized game movement calculation. The game uses fixed gravity and fall speed,
+/// so keep those constants inside WASM and write directly into the reusable output.
+#[inline(always)]
+fn calculate_game_player_motion_into(
+    x: f64,
+    y: f64,
+    vertical_velocity: f64,
+    axis: f64,
+    dt: f64,
+    speed: f64,
+    output: &mut [f64; 4],
+) {
+    let horizontal_velocity = axis * speed;
+    let next_vertical_velocity = (vertical_velocity + 1580.0 * dt).min(900.0);
+
+    output[0] = x + horizontal_velocity * dt;
+    output[1] = y + next_vertical_velocity * dt;
+    output[2] = horizontal_velocity;
+    output[3] = next_vertical_velocity;
+}
+
 /// Legacy allocating result retained for parity checks and before/after benchmarks.
 #[wasm_bindgen]
 pub fn step_player_motion(
@@ -65,6 +86,31 @@ pub fn step_player_motion(
     )
     .to_vec()
     .into_boxed_slice()
+}
+
+/// Fast game-specific movement step using fixed gravity/fall speed and no result allocation.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn step_player_motion_fast_into_buffer(
+    x: f64,
+    y: f64,
+    vertical_velocity: f64,
+    axis: f64,
+    dt: f64,
+    speed: f64,
+) {
+    MOTION_BUFFER.with(|buffer| {
+        let mut output = buffer.borrow_mut();
+        calculate_game_player_motion_into(
+            x,
+            y,
+            vertical_velocity,
+            axis,
+            dt,
+            speed,
+            &mut output,
+        );
+    });
 }
 
 /// Create a typed-array view over the reusable WASM result buffer.
@@ -114,7 +160,7 @@ pub fn step_player_motion_into_buffer(
 
 #[cfg(test)]
 mod tests {
-    use super::{calculate_player_motion, step_player_motion};
+    use super::{calculate_game_player_motion_into, calculate_player_motion, step_player_motion};
 
     fn close(actual: f64, expected: f64) {
         assert!(
@@ -155,6 +201,17 @@ mod tests {
 
         close(step[3], 900.0);
         close(step[1], 90.0);
+    }
+
+    #[test]
+    fn specialized_game_calculation_matches_the_generic_result() {
+        let expected = step_player_motion(100.0, 50.0, -20.0, 1.0, 1.0 / 60.0, 300.0, 1580.0, 900.0);
+        let mut actual = [0.0; 4];
+        calculate_game_player_motion_into(100.0, 50.0, -20.0, 1.0, 1.0 / 60.0, 300.0, &mut actual);
+
+        for index in 0..4 {
+            close(actual[index], expected[index]);
+        }
     }
 
     #[test]
