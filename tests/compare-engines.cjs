@@ -5,7 +5,8 @@ const { performance } = require('node:perf_hooks');
 const {
   step_player_motion: rustStepAllocating,
   create_motion_buffer,
-  step_player_motion_into_buffer: rustStepIntoBuffer
+  step_player_motion_into_buffer: rustStepIntoBuffer,
+  step_player_motion_fast_into_buffer: rustStepFastIntoBuffer
 } = require('../rust/pkg-node/frog_jumper_rust_node.js');
 
 // Warm the legacy allocating export before creating a view into WASM memory.
@@ -65,10 +66,13 @@ function verifyParity() {
       const legacy = Array.from(rustStepAllocating(rust[0], rust[1], rust[2], ...args));
       rustStepIntoBuffer(rust[0], rust[1], rust[2], ...args);
       const optimized = readRustBuffer();
+      rustStepFastIntoBuffer(rust[0], rust[1], rust[2], axis, dt, scenario.speed);
+      const specialized = readRustBuffer();
 
       for (let k = 0; k < 4; k++) {
         assertClose(legacy[k], expected[k], scenario.name + ' legacy step ' + i + ' field ' + k);
         assertClose(optimized[k], expected[k], scenario.name + ' buffered step ' + i + ' field ' + k);
+        assertClose(specialized[k], expected[k], scenario.name + ' specialized step ' + i + ' field ' + k);
       }
 
       js = [expected[0], expected[1], expected[3]];
@@ -76,7 +80,7 @@ function verifyParity() {
       compared++;
     }
   }
-  console.log('PARITY PASS: ' + compared + ' movement steps matched across JavaScript, legacy Rust/WASM, and reusable-buffer Rust/WASM.');
+  console.log('PARITY PASS: ' + compared + ' movement steps matched across JavaScript, legacy Rust/WASM, reusable-buffer Rust/WASM, and specialized Rust/WASM.');
 }
 
 // This mirrors the actual game's JavaScript fallback: inline math and no
@@ -120,6 +124,19 @@ function runRustBufferBenchmark(iterations) {
   return { ms: performance.now() - start, checksum, x, y, vy };
 }
 
+function runRustFastBufferBenchmark(iterations) {
+  ensureRustBuffer();
+  let x = 120, y = 80, vy = 0, checksum = 0;
+  const start = performance.now();
+  for (let i = 0; i < iterations; i++) {
+    const axis = (i % 180 < 90) ? 1 : -1;
+    rustStepFastIntoBuffer(x, y, vy, axis, 1 / 60, 300);
+    x = rustBuffer[0]; y = rustBuffer[1]; vy = rustBuffer[3];
+    checksum += rustBuffer[2];
+  }
+  return { ms: performance.now() - start, checksum, x, y, vy };
+}
+
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)];
@@ -131,18 +148,22 @@ function benchmark() {
   runJsBenchmark(warmup);
   runRustAllocatingBenchmark(warmup);
   runRustBufferBenchmark(warmup);
+  runRustFastBufferBenchmark(warmup);
 
   const jsTimes = [];
   const allocatingTimes = [];
   const bufferTimes = [];
-  let jsLast, allocatingLast, bufferLast;
+  const fastTimes = [];
+  let jsLast, allocatingLast, bufferLast, fastLast;
 
   for (let round = 0; round < 5; round++) {
     if (round % 2 === 0) {
       jsLast = runJsBenchmark(iterations);
       allocatingLast = runRustAllocatingBenchmark(iterations);
       bufferLast = runRustBufferBenchmark(iterations);
+      fastLast = runRustFastBufferBenchmark(iterations);
     } else {
+      fastLast = runRustFastBufferBenchmark(iterations);
       bufferLast = runRustBufferBenchmark(iterations);
       jsLast = runJsBenchmark(iterations);
       allocatingLast = runRustAllocatingBenchmark(iterations);
@@ -150,9 +171,10 @@ function benchmark() {
     jsTimes.push(jsLast.ms);
     allocatingTimes.push(allocatingLast.ms);
     bufferTimes.push(bufferLast.ms);
+    fastTimes.push(fastLast.ms);
   }
 
-  for (const [label, result] of [['allocating Rust', allocatingLast], ['buffered Rust', bufferLast]]) {
+  for (const [label, result] of [['allocating Rust', allocatingLast], ['buffered Rust', bufferLast], ['specialized Rust', fastLast]]) {
     assertClose(result.x, jsLast.x, label + ' final x');
     assertClose(result.y, jsLast.y, label + ' final y');
     assertClose(result.vy, jsLast.vy, label + ' final vertical velocity');
@@ -161,13 +183,16 @@ function benchmark() {
   const jsMedian = median(jsTimes);
   const allocatingMedian = median(allocatingTimes);
   const bufferMedian = median(bufferTimes);
+  const fastMedian = median(fastTimes);
   console.log('BENCHMARK (Node.js runner; movement math only, not FPS or full-game performance)');
   console.log('Iterations per round: ' + iterations + '; rounds: 5; warmup: ' + warmup);
   console.log('JavaScript inline median: ' + jsMedian.toFixed(3) + ' ms');
   console.log('Rust/WASM allocating-result median: ' + allocatingMedian.toFixed(3) + ' ms');
   console.log('Rust/WASM reusable-buffer median: ' + bufferMedian.toFixed(3) + ' ms');
+  console.log('Rust/WASM specialized median: ' + fastMedian.toFixed(3) + ' ms');
   console.log('Reusable buffer vs allocating Rust: ' + (allocatingMedian / bufferMedian).toFixed(2) + 'x speedup');
-  console.log('Reusable-buffer Rust/WASM vs inline JS: ' + (bufferMedian / jsMedian * 100).toFixed(1) + '% of JS time (' + (bufferMedian <= jsMedian ? 'faster' : 'slower') + ')');
+  console.log('Specialized vs generic reusable-buffer Rust: ' + (bufferMedian / fastMedian).toFixed(2) + 'x speedup');
+  console.log('Specialized Rust/WASM vs inline JS: ' + (fastMedian / jsMedian * 100).toFixed(1) + '% of JS time (' + (fastMedian <= jsMedian ? 'faster' : 'slower') + ')');
 }
 
 verifyParity();
